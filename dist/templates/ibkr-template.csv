@@ -1,0 +1,4 @@
+TradeDate,Symbol,Quantity,T.Price,Comm/Fee,Description,Currency
+2025-01-15,AAPL,100,150.00,1.00,Bought 100 AAPL,USD
+2025-02-15,AAPL,-50,160.00,1.00,Sold 50 AAPL,USD
+2025-03-15,AAPL,,0.00,0.00,Dividend AAPL,USD
