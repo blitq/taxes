@@ -114,7 +114,7 @@ export default function SummaryView({ transactions, exchangeRates }) {
 
       <div className="flex gap-2">
         <button
-          onClick={onExportCSV}
+          onClick={handleExportCSV}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
         >
           Export Summary CSV
