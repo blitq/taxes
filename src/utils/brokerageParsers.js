@@ -53,7 +53,7 @@ function parseNumber(value) {
   // Remove currency symbols and spaces
   let cleaned = value.replace(/[$€£\s]/g, '').trim();
   // Detect European format: period as thousands sep, comma as decimal (e.g. 1.234,56)
-  if (/^\-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(cleaned)) {
+  if (/^\-?\d{1,3}(\.\d{3})+(,\d+)$/.test(cleaned)) {
     cleaned = cleaned.replace(/\./g, '').replace(',', '.');
   } else {
     // US format or plain number: remove thousands commas
@@ -331,7 +331,7 @@ export function parseCSV(csvText, brokerageHint = null) {
       detected = 'ibkr';
     } else if (lowerText.includes('xtb') || lowerText.includes('x-trade') || lowerText.includes('cena')) {
       detected = 'xtb';
-    } else if (lowerText.includes('degiro') || lowerText.includes('product') && lowerText.includes('isin') && lowerText.includes('value')) {
+    } else if (lowerText.includes('degiro') || (lowerText.includes('product') && lowerText.includes('isin') && lowerText.includes('value'))) {
       detected = 'degiro';
     } else {
       // Try generic parser

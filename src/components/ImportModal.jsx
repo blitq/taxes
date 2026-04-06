@@ -2,11 +2,11 @@ import { useState, useRef } from 'react';
 import { parseCSV } from '../utils/brokerageParsers.js';
 
 const BROKERAGES = [
-  { id: 'schwab', name: 'Charles Schwab', description: 'US brokerage' },
-  { id: 'ibkr', name: 'Interactive Brokers (IBKR)', description: 'Global brokerage' },
-  { id: 'xtb', name: 'XTB', description: 'Polish/European brokerage' },
-  { id: 'degiro', name: 'DEGIRO', description: 'European online broker' },
-  { id: 'generic', name: 'Generic CSV', description: 'Custom format (date, symbol, quantity, price)' },
+  { id: 'schwab', name: 'Charles Schwab', description: 'US brokerage', hasTemplate: true },
+  { id: 'ibkr', name: 'Interactive Brokers (IBKR)', description: 'Global brokerage', hasTemplate: true },
+  { id: 'xtb', name: 'XTB', description: 'Polish/European brokerage', hasTemplate: true },
+  { id: 'degiro', name: 'DEGIRO', description: 'European online broker', hasTemplate: true },
+  { id: 'generic', name: 'Generic CSV', description: 'Custom format (date, symbol, quantity, price)', hasTemplate: false },
 ];
 
 export default function ImportModal({ isOpen, onClose, onImport }) {
@@ -99,15 +99,18 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium">Brokerage Format</label>
-              {brokerage !== 'generic' && (
-                <a
-                  href={`${import.meta.env.BASE_URL}templates/${brokerage}-template.csv`}
-                  download
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  Download {BROKERAGES.find(b => b.id === brokerage)?.name} template
-                </a>
-              )}
+              {(() => {
+                const selected = BROKERAGES.find(b => b.id === brokerage);
+                return selected?.hasTemplate ? (
+                  <a
+                    href={`${import.meta.env.BASE_URL}templates/${selected.id}-template.csv`}
+                    download
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Download {selected.name} template
+                  </a>
+                ) : null;
+              })()}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {BROKERAGES.map(b => (

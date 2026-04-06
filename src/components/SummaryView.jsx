@@ -3,8 +3,7 @@ import { calculateTaxes } from '../utils/taxCalculator.js';
 import { exportSummaryCSV, downloadFile } from '../utils/csvExporter.js';
 
 export default function SummaryView({ transactions, exchangeRates }) {
-  const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Compute available years from transactions
   const availableYears = useMemo(() => {
