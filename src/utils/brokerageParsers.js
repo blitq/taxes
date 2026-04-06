@@ -393,16 +393,8 @@ export function parseDegiroCSV(csvText) {
       const productName = colMap.product >= 0 ? cleanCols[colMap.product] : '';
       const description = colMap.description >= 0 ? cleanCols[colMap.description].toLowerCase() : '';
 
-      // Extract ticker from product name or ISIN
-      let symbol = '';
-      if (colMap.isin >= 0 && cleanCols[colMap.isin]) {
-        // Use last part of product name as ticker approximation, or ISIN
-        const productParts = productName.split(/\s+/);
-        symbol = productParts[0]; // First word is often the ticker
-      } else {
-        symbol = productName.split(/\s+/)[0];
-      }
-      symbol = normalizeTicker(symbol);
+      // Extract ticker from the first word of the product name
+      const symbol = normalizeTicker(productName.split(/\s+/)[0]);
 
       const quantity = colMap.quantity >= 0 ? Math.abs(parseNumber(cleanCols[colMap.quantity])) : 0;
       const price = colMap.price >= 0 ? Math.abs(parseNumber(cleanCols[colMap.price])) : 0;
