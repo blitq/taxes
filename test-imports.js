@@ -3,7 +3,7 @@
  * Run with: node --experimental-vm-modules test-imports.js
  */
 
-import { parseCSV, parseSchwabCSV, parseIbkrcsv, parseXtbCsv } from './src/utils/brokerageParsers.js';
+import { parseCSV, parseSchwabCSV, parseIbkrCSV, parseXtbCsv } from './src/utils/brokerageParsers.js';
 
 console.log('=== Testing Brokerage CSV Parsers ===\n');
 
@@ -30,7 +30,7 @@ const ibkrCSV = `TradeDate,Symbol,Quantity,T.Price,Comm/Fee,Description,Currency
 2025-02-15,AAPL,-50,160.00,1.00,Sold 50 AAPL,USD
 2025-03-15,AAPL,,0.00,0.00,Dividend AAPL,USD`;
 
-const ibkrResult = parseIbkrcsv(ibkrCSV);
+const ibkrResult = parseIbkrCSV(ibkrCSV);
 console.log(`   Parsed ${ibkrResult.transactions.length} transactions`);
 console.log(`   Errors: ${ibkrResult.errors.length}`);
 ibkrResult.transactions.forEach(tx => {

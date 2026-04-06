@@ -3,6 +3,76 @@
  * Polish tax rates: 19% on capital gains and dividends
  */
 
+/**
+ * Calculate current portfolio holdings (unrealized positions) using FIFO
+ * @param {Array} transactions - Array of transaction objects
+ * @param {Object} exchangeRates - Map of date -> USD/PLN rate
+ * @returns {Array} holdings - Current open positions with cost basis
+ */
+export function calculateHoldings(transactions, exchangeRates) {
+  const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // FIFO inventory per ticker
+  const inventory = {};
+
+  for (const tx of sorted) {
+    if (tx.type === 'buy') {
+      if (!inventory[tx.ticker]) inventory[tx.ticker] = [];
+      inventory[tx.ticker].push({
+        date: tx.date,
+        shares: tx.shares,
+        remainingShares: tx.shares,
+        priceUsd: tx.priceUsd,
+        feeUsd: tx.feeUsd || 0,
+      });
+    } else if (tx.type === 'sell') {
+      let sharesToSell = tx.shares;
+      const lots = inventory[tx.ticker] || [];
+
+      for (const lot of lots) {
+        if (sharesToSell <= 0) break;
+        const consumed = Math.min(sharesToSell, lot.remainingShares);
+        lot.remainingShares -= consumed;
+        sharesToSell -= consumed;
+      }
+
+      // Remove exhausted lots
+      if (inventory[tx.ticker]) {
+        inventory[tx.ticker] = inventory[tx.ticker].filter(l => l.remainingShares > 0);
+      }
+    }
+  }
+
+  // Build holdings summary
+  const holdings = [];
+  for (const [ticker, lots] of Object.entries(inventory)) {
+    const activeLots = lots.filter(l => l.remainingShares > 0);
+    if (activeLots.length === 0) continue;
+
+    const totalShares = activeLots.reduce((sum, l) => sum + l.remainingShares, 0);
+    const totalCostUsd = activeLots.reduce(
+      (sum, l) => sum + l.remainingShares * l.priceUsd + l.feeUsd * (l.remainingShares / l.shares),
+      0
+    );
+    const avgCostPerShareUsd = totalShares > 0 ? totalCostUsd / totalShares : 0;
+
+    // Use earliest buy date rate for reference
+    const firstDate = activeLots[0].date;
+    const rate = exchangeRates[firstDate];
+
+    holdings.push({
+      ticker,
+      totalShares,
+      totalCostUsd,
+      avgCostPerShareUsd,
+      totalCostPln: rate ? totalCostUsd * rate : null,
+      lots: activeLots,
+    });
+  }
+
+  return holdings.sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
+
 const TAX_RATE = 0.19;
 
 /**

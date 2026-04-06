@@ -45,12 +45,20 @@ function parseDate(dateStr) {
 }
 
 /**
- * Parse number with potential currency symbols and commas
+ * Parse number with potential currency symbols and commas/periods
+ * Handles both US (1,234.56) and European (1.234,56) number formats
  */
 function parseNumber(value) {
   if (!value || typeof value !== 'string') return 0;
-  // Remove currency symbols, commas, spaces
-  const cleaned = value.replace(/[$,€£\s]/g, '').replace(',', '.');
+  // Remove currency symbols and spaces
+  let cleaned = value.replace(/[$€£\s]/g, '').trim();
+  // Detect European format: period as thousands sep, comma as decimal (e.g. 1.234,56)
+  if (/^\-?\d{1,3}(\.\d{3})+(,\d+)$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  } else {
+    // US format or plain number: remove thousands commas
+    cleaned = cleaned.replace(/,/g, '');
+  }
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? 0 : parsed;
 }
@@ -132,7 +140,12 @@ export function parseSchwabCSV(csvText) {
         tx.foreignTaxUsd = null;
       }
 
-      if (date && symbol && quantity > 0 && price > 0) {
+      const isValid = date && symbol && (
+        (type === 'dividend' && tx.dividendGrossUsd > 0) ||
+        (type !== 'dividend' && quantity > 0 && price > 0)
+      );
+
+      if (isValid) {
         transactions.push(tx);
       } else {
         errors.push(`Row ${i + 1}: Missing required data`);
@@ -147,9 +160,9 @@ export function parseSchwabCSV(csvText) {
 
 /**
  * Interactive Brokers (IBKR) CSV Parser
- * Common format: TradeDate, Symbol, Quantity, T.Price, Comm/Fee, Cusip, Description, etc.
+ * Common format: TradeDate, Symbol, Quantity, T.Price, Comm/Fee, Cusip, Description, Amount
  */
-export function parseIbkrcsv(csvText) {
+export function parseIbkrCSV(csvText) {
   const lines = csvText.split('\n').filter(line => line.trim());
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
 
@@ -189,7 +202,8 @@ export function parseIbkrcsv(csvText) {
       }
 
       // IBKR often uses negative for buys, positive for sells in amount
-      if (colMap.amount >= 0 && amount !== null) {
+      // Only override trade direction if not a dividend
+      if (type !== 'dividend' && colMap.amount >= 0 && amount !== null) {
         type = amount < 0 ? 'buy' : 'sell';
       }
 
@@ -207,7 +221,12 @@ export function parseIbkrcsv(csvText) {
         tx.dividendGrossUsd = amount ? Math.abs(amount) : quantity * price;
       }
 
-      if (date && symbol && quantity > 0 && price > 0) {
+      const isValid = date && symbol && (
+        (type === 'dividend' && tx.dividendGrossUsd > 0) ||
+        (type !== 'dividend' && quantity > 0 && price > 0)
+      );
+
+      if (isValid) {
         transactions.push(tx);
       } else {
         errors.push(`Row ${i + 1}: Missing required data (date=${date}, symbol=${symbol}, qty=${quantity}, price=${price})`);
@@ -279,7 +298,12 @@ export function parseXtbCsv(csvText) {
         tx.dividendGrossUsd = balance > 0 ? balance : quantity * price;
       }
 
-      if (date && symbol && quantity > 0 && price > 0) {
+      const isValid = date && symbol && (
+        (type === 'dividend' && tx.dividendGrossUsd > 0) ||
+        (type !== 'dividend' && quantity > 0 && price > 0)
+      );
+
+      if (isValid) {
         transactions.push(tx);
       } else {
         errors.push(`Row ${i + 1}: Missing required data`);
@@ -307,6 +331,8 @@ export function parseCSV(csvText, brokerageHint = null) {
       detected = 'ibkr';
     } else if (lowerText.includes('xtb') || lowerText.includes('x-trade') || lowerText.includes('cena')) {
       detected = 'xtb';
+    } else if (lowerText.includes('degiro') || (lowerText.includes('product') && lowerText.includes('isin') && lowerText.includes('value'))) {
+      detected = 'degiro';
     } else {
       // Try generic parser
       return parseGenericCSV(csvText);
@@ -318,12 +344,115 @@ export function parseCSV(csvText, brokerageHint = null) {
       return parseSchwabCSV(csvText);
     case 'ibkr':
     case 'interactive brokers':
-      return parseIbkrcsv(csvText);
+      return parseIbkrCSV(csvText);
     case 'xtb':
       return parseXtbCsv(csvText);
+    case 'degiro':
+      return parseDegiroCSV(csvText);
     default:
       return parseGenericCSV(csvText);
   }
+}
+
+/**
+ * DEGIRO CSV Parser
+ * Common format: Date,Time,Product,ISIN,Description,FX,Change,,Total,,Order ID
+ * Or: Date,Time,Product,ISIN,Exchange,Execution,Quantity,Price,,Value,,Transaction costs,,Total,,Order ID
+ */
+export function parseDegiroCSV(csvText) {
+  const lines = csvText.split('\n').filter(line => line.trim());
+  if (lines.length < 2) return { transactions: [], errors: ['CSV is empty'], warnings: [] };
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+
+  const colMap = {
+    date: headers.findIndex(h => h === 'date' || h.includes('date')),
+    product: headers.findIndex(h => h === 'product' || h.includes('product')),
+    isin: headers.findIndex(h => h === 'isin' || h.includes('isin')),
+    description: headers.findIndex(h => h === 'description' || h.includes('description')),
+    quantity: headers.findIndex(h => h === 'quantity' || h.includes('quantity')),
+    price: headers.findIndex(h => h === 'price' || (h.includes('price') && !h.includes('local'))),
+    value: headers.findIndex(h => h === 'value' || (h.includes('value') && !h.includes('local'))),
+    costs: headers.findIndex(h => h.includes('transaction costs') || h.includes('costs')),
+    total: headers.findIndex(h => h === 'total' || h.includes('total')),
+  };
+
+  const transactions = [];
+  const errors = [];
+  const warnings = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    // Handle quoted CSV fields
+    const cols = lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || [];
+    const cleanCols = cols.map(c => c.trim().replace(/^"|"$/g, ''));
+
+    if (cleanCols.length < 4) continue;
+
+    try {
+      const date = parseDate(cleanCols[colMap.date]);
+      const productName = colMap.product >= 0 ? cleanCols[colMap.product] : '';
+      const description = colMap.description >= 0 ? cleanCols[colMap.description].toLowerCase() : '';
+
+      // Extract ticker from the first word of the product name
+      const symbol = normalizeTicker(productName.split(/\s+/)[0]);
+
+      const quantity = colMap.quantity >= 0 ? Math.abs(parseNumber(cleanCols[colMap.quantity])) : 0;
+      const price = colMap.price >= 0 ? Math.abs(parseNumber(cleanCols[colMap.price])) : 0;
+      const costs = colMap.costs >= 0 ? Math.abs(parseNumber(cleanCols[colMap.costs])) : 0;
+
+      // Determine transaction type
+      let type = 'buy';
+      if (description.includes('sell') || description.includes('sold') || description.includes('verkoop')) {
+        type = 'sell';
+      } else if (description.includes('buy') || description.includes('koop')) {
+        type = 'buy';
+      } else if (description.includes('dividend') || description.includes('coupon')) {
+        type = 'dividend';
+      }
+
+      // Check quantity sign for buy/sell
+      if (colMap.quantity >= 0 && cleanCols[colMap.quantity]) {
+        const rawQty = parseNumber(cleanCols[colMap.quantity]);
+        if (rawQty < 0) type = 'sell';
+        else if (rawQty > 0 && type === 'buy') type = 'buy';
+      }
+
+      const tx = {
+        type,
+        date,
+        ticker: symbol,
+        shares: quantity,
+        priceUsd: price,
+        feeUsd: costs,
+        notes: productName || description,
+      };
+
+      if (type === 'dividend') {
+        const total = colMap.total >= 0 ? Math.abs(parseNumber(cleanCols[colMap.total])) : 0;
+        const value = colMap.value >= 0 ? Math.abs(parseNumber(cleanCols[colMap.value])) : 0;
+        tx.dividendGrossUsd = total || value || quantity * price;
+      }
+
+      const isValid = date && symbol && (
+        (type === 'dividend' && tx.dividendGrossUsd > 0) ||
+        (type !== 'dividend' && quantity > 0 && price > 0)
+      );
+
+      if (isValid) {
+        transactions.push(tx);
+      } else {
+        errors.push(`Row ${i + 1}: Missing required data`);
+      }
+    } catch (err) {
+      errors.push(`Row ${i + 1}: ${err.message}`);
+    }
+  }
+
+  if (transactions.length > 0) {
+    warnings.push('DEGIRO: prices are in local currency. Ensure USD conversion if transactions are not in USD.');
+  }
+
+  return { transactions, errors, warnings };
 }
 
 /**
