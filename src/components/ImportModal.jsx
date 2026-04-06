@@ -5,6 +5,7 @@ const BROKERAGES = [
   { id: 'schwab', name: 'Charles Schwab', description: 'US brokerage' },
   { id: 'ibkr', name: 'Interactive Brokers (IBKR)', description: 'Global brokerage' },
   { id: 'xtb', name: 'XTB', description: 'Polish/European brokerage' },
+  { id: 'degiro', name: 'DEGIRO', description: 'European online broker' },
   { id: 'generic', name: 'Generic CSV', description: 'Custom format (date, symbol, quantity, price)' },
 ];
 
@@ -18,20 +19,28 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
-    if (selected && selected.type === 'text/csv') {
-      setFile(selected);
-      setErrors([]);
-      previewCSV(selected);
-    } else {
-      setErrors(['Please select a valid CSV file']);
+    if (selected) {
+      const isCsv = selected.type === 'text/csv' ||
+        selected.type === 'application/csv' ||
+        selected.type === 'text/plain' ||
+        selected.type === 'application/vnd.ms-excel' ||
+        selected.type === 'application/octet-stream' ||
+        selected.name.toLowerCase().endsWith('.csv');
+      if (isCsv) {
+        setFile(selected);
+        setErrors([]);
+        previewCSV(selected, brokerage);
+      } else {
+        setErrors(['Please select a valid CSV file (.csv extension)']);
+      }
     }
   };
 
-  const previewCSV = async (fileObj) => {
+  const previewCSV = async (fileObj, brokerageId) => {
     setLoading(true);
     try {
       const text = await fileObj.text();
-      const result = parseCSV(text, brokerage);
+      const result = parseCSV(text, brokerageId);
       setPreview(result);
 
       if (result.errors.length > 0) {
@@ -41,6 +50,15 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
       setErrors([`Failed to parse CSV: ${err.message}`]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBrokerageChange = (newBrokerage) => {
+    setBrokerage(newBrokerage);
+    setErrors([]);
+    // Re-parse the already-uploaded file with the new brokerage format
+    if (file) {
+      previewCSV(file, newBrokerage);
     }
   };
 
@@ -83,7 +101,7 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
               <label className="block text-sm font-medium">Brokerage Format</label>
               {brokerage !== 'generic' && (
                 <a
-                  href={`/templates/${brokerage}-template.csv`}
+                  href={`${import.meta.env.BASE_URL}templates/${brokerage}-template.csv`}
                   download
                   className="text-xs text-blue-600 hover:underline"
                 >
@@ -106,7 +124,7 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
                     name="brokerage"
                     value={b.id}
                     checked={brokerage === b.id}
-                    onChange={(e) => setBrokerage(e.target.value)}
+                    onChange={(e) => handleBrokerageChange(e.target.value)}
                     className="sr-only"
                   />
                   <div className="font-medium">{b.name}</div>
@@ -122,7 +140,7 @@ export default function ImportModal({ isOpen, onClose, onImport }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,text/csv,application/csv,text/plain"
               onChange={handleFileChange}
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import React from 'react';
 import TransactionForm from './TransactionForm';
 
 export default function TransactionList({ transactions, onUpdate, onDelete, nbpRates }) {
@@ -118,14 +119,14 @@ export default function TransactionList({ transactions, onUpdate, onDelete, nbpR
                     </td>
                   )}
                   {tx.type === 'dividend' && (
-                    <>
+                    <React.Fragment>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                         {formatUSD(tx.dividendGrossUsd)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                         {formatUSD(tx.foreignTaxUsd)}
                       </td>
-                    </>
+                    </React.Fragment>
                   )}
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                     {formatUSD(tx.feeUsd)}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import SummaryView from './components/SummaryView';
+import HoldingsView from './components/HoldingsView';
 import ImportModal from './components/ImportModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useNbpRates } from './hooks/useNbpRates';
@@ -90,6 +91,16 @@ function App() {
               Transactions
             </button>
             <button
+              onClick={() => setActiveView('holdings')}
+              className={`px-4 py-3 border-b-2 font-medium ${
+                activeView === 'holdings'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Holdings
+            </button>
+            <button
               onClick={() => setActiveView('summary')}
               className={`px-4 py-3 border-b-2 font-medium ${
                 activeView === 'summary'
@@ -156,6 +167,14 @@ function App() {
             onUpdate={updateTransaction}
             onDelete={deleteTransaction}
             nbpRates={exchangeRatesMap}
+          />
+        )}
+
+        {/* Holdings */}
+        {activeView === 'holdings' && (
+          <HoldingsView
+            transactions={transactions}
+            exchangeRates={exchangeRatesMap}
           />
         )}
 

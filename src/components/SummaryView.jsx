@@ -1,24 +1,30 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { calculateTaxes } from '../utils/taxCalculator.js';
 import { exportSummaryCSV, downloadFile } from '../utils/csvExporter.js';
 
 export default function SummaryView({ transactions, exchangeRates }) {
-  const summary = useMemo(() => {
-    if (transactions.length === 0) return null;
-    return calculateTaxes(transactions, exchangeRates);
-  }, [transactions, exchangeRates]);
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
-  if (!summary) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow text-center text-gray-500">
-        No transactions to calculate. Add some transactions to see your tax summary.
-      </div>
-    );
-  }
+  // Compute available years from transactions
+  const availableYears = useMemo(() => {
+    const years = [...new Set(transactions.map(t => new Date(t.date).getFullYear()))].sort((a, b) => b - a);
+    return years;
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    if (!selectedYear) return transactions;
+    return transactions.filter(t => new Date(t.date).getFullYear() === selectedYear);
+  }, [transactions, selectedYear]);
+
+  const summary = useMemo(() => {
+    if (filteredTransactions.length === 0) return null;
+    return calculateTaxes(filteredTransactions, exchangeRates);
+  }, [filteredTransactions, exchangeRates]);
 
   const handleExportCSV = () => {
-    const csv = exportSummaryCSV(summary);
-    downloadFile(csv, `pit38-summary-${new Date().toISOString().split('T')[0]}.csv`);
+    const csv = exportSummaryCSV(summary, selectedYear);
+    downloadFile(csv, `pit38-summary-${selectedYear}.csv`);
   };
 
   const formatCurrency = (value, currency = 'PLN') => {
@@ -37,8 +43,46 @@ export default function SummaryView({ transactions, exchangeRates }) {
     </div>
   );
 
+  const YearSelector = () => (
+    <div className="bg-white p-4 rounded-lg shadow flex flex-wrap items-center gap-4">
+      <h3 className="font-medium">Tax Year</h3>
+      <div className="flex gap-2 flex-wrap">
+        {availableYears.map(year => (
+          <button
+            key={year}
+            onClick={() => setSelectedYear(year)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
+              selectedYear === year
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {year}
+          </button>
+        ))}
+      </div>
+      {availableYears.length === 0 && (
+        <p className="text-sm text-gray-500">No transactions found</p>
+      )}
+    </div>
+  );
+
+  if (!summary) {
+    return (
+      <div className="space-y-4">
+        <YearSelector />
+        <div className="bg-white p-6 rounded-lg shadow text-center text-gray-500">
+          No transactions for {selectedYear}. Add transactions or select a different year.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Year Selector */}
+      <YearSelector />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           title="Capital Gains (PLN)"
