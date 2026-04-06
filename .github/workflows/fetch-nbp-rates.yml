@@ -26,8 +26,7 @@ jobs:
 
       - name: Fetch NBP rates for 2025
         run: |
-          mkdir -p rates/2025
-          node fetch-rates.js
+          node scripts/fetch-nbp-rates.js
 
       - name: Commit and push
         run: |
